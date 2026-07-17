@@ -22,6 +22,11 @@
     --subhead-accent-color:#ff5b00;
     --subhead-x:0px;
     --subhead-y:0px;
+    --subhead-rotate:0deg;
+    --image-rotate:0deg;
+    --headline-x:0px;
+    --headline-y:0px;
+    --headline-rotate:0deg;
   }
 
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -182,6 +187,11 @@
     font-family:'Poppins',sans-serif;
   }
   .btn:hover{ filter:brightness(1.15); }
+  .toolbar-row .btn.btn-full{
+    flex:1;
+    text-align:center;
+    padding:10px 10px;
+  }
 
   .btn-download{
     background:linear-gradient(135deg,#ff7a1a,#ff5b00);
@@ -301,6 +311,39 @@
     padding:0 41px;
     position:relative;
     z-index:2;
+    transform:translate(var(--headline-x, 0px), var(--headline-y, 0px)) rotate(var(--headline-rotate, 0deg));
+    transform-origin:center center;
+    border-radius:14px;
+    transition:box-shadow 0.15s ease;
+  }
+  .headline.is-selected{
+    box-shadow:0 0 0 6px #fff, 0 0 0 8px rgba(0,0,0,0.15), 0 14px 30px rgba(0,0,0,0.2);
+  }
+  .headline-drag-handle{
+    position:absolute;
+    top:-58px;
+    left:50%;
+    transform:translateX(-50%);
+    background:var(--ink);
+    color:#fff;
+    font-size:24px;
+    font-weight:700;
+    padding:10px 22px;
+    border-radius:999px;
+    cursor:grab;
+    display:none;
+    white-space:nowrap;
+    box-shadow:0 8px 18px rgba(0,0,0,0.3);
+    z-index:6;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  .headline.is-selected .headline-drag-handle{ display:flex; align-items:center; }
+  .headline-drag-handle:active{ cursor:grabbing; }
+  .headline.is-selected .rotate-handle{ opacity:1; }
+  .headline .rotate-handle{
+    top:-58px;
+    left:calc(50% + 120px);
   }
   .headline [contenteditable]{
     display:block;
@@ -357,6 +400,8 @@
     width:90%;
     height:579px;
     z-index:2;
+    transform:rotate(var(--image-rotate, 0deg));
+    transform-origin:center center;
   }
   .image-stage{
     position:absolute;
@@ -420,7 +465,8 @@
     position:relative;
     z-index:5;
     display:block;
-    transform:translate(var(--subhead-x, 0px), var(--subhead-y, 0px));
+    transform:translate(var(--subhead-x, 0px), var(--subhead-y, 0px)) rotate(var(--subhead-rotate, 0deg));
+    transform-origin:center center;
     border-radius:14px;
     transition:box-shadow 0.15s ease;
   }
@@ -463,6 +509,49 @@
   .resize-handle-r{ width:16px; height:64px; right:-8px; top:50%; transform:translateY(-50%); border-radius:8px; cursor:ew-resize; }
   .resize-handle-b{ width:64px; height:16px; bottom:-8px; left:50%; transform:translateX(-50%); border-radius:8px; cursor:ns-resize; }
   .resize-handle-br{ width:26px; height:26px; right:-13px; bottom:-13px; border-radius:8px; cursor:nwse-resize; }
+
+  .rotate-handle{
+    position:absolute;
+    width:34px;
+    height:34px;
+    border-radius:50%;
+    background:var(--accent);
+    border:3px solid #fff;
+    box-shadow:0 2px 6px rgba(0,0,0,0.35);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:6;
+    opacity:0;
+    transition:opacity 0.15s;
+    cursor:grab;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  .rotate-handle:active{ cursor:grabbing; }
+  .rotate-handle::after{
+    content:'';
+    position:absolute;
+    top:100%;
+    left:50%;
+    width:2px;
+    height:16px;
+    background:var(--accent);
+    transform:translateX(-50%);
+  }
+  .image-stage-wrap .rotate-handle{
+    top:-46px;
+    left:50%;
+    transform:translateX(-50%);
+  }
+  .subhead-wrap .rotate-handle{
+    top:-58px;
+    left:calc(50% + 120px);
+  }
+  .image-stage-wrap:hover .rotate-handle,
+  .image-stage-wrap.is-resizing .rotate-handle,
+  .image-stage-wrap.is-rotating .rotate-handle{ opacity:1; }
+  .subhead-wrap.is-selected .rotate-handle{ opacity:1; }
 
   .word-toolbar{
     position:fixed;
@@ -540,8 +629,11 @@
 
     <div><b>Edit content</b> — tap text to edit, tap center box for product photo.</div>
     <div class="toolbar-row">
-      <button class="btn" id="uploadBtn">Upload center image</button>
-      <button class="btn" id="resetBtn">Reset center image</button>
+      <button class="btn btn-full" id="resetAllPosBtn">Reset all positions &amp; rotation</button>
+    </div>
+    <div class="toolbar-row">
+      <button class="btn btn-full" id="uploadBtn">Upload center image</button>
+      <button class="btn btn-full" id="resetBtn">Reset center image</button>
     </div>
     <details class="section-block" id="headlinePanel">
       <summary class="section-title">Headline</summary>
@@ -581,6 +673,8 @@
         <div class="swatch" data-color="#0e0e0e" style="background:#0e0e0e"></div>
         <label class="swatch custom-swatch"><input type="color" value="#ff5b00"></label>
       </div>
+      <div class="control-label">Headline position &amp; rotation</div>
+      <div class="control-label" style="opacity:0.7">Tap the headline, then drag the "Move" handle to reposition, or the round handle above to rotate.</div>
     </details>
 
     <details class="section-block" id="subheadPanel">
@@ -646,11 +740,8 @@
         <input type="checkbox" id="footerStripToggle" checked>
         <span>Show footer strip</span>
       </label>
-      <div class="control-label">Sub headline position</div>
-      <div class="toolbar-row">
-        <button class="btn" id="subheadResetPosBtn">Reset position</button>
-      </div>
-      <div class="control-label" style="opacity:0.7">Tap sub headline, then drag the "Move" handle to reposition.</div>
+      <div class="control-label">Sub headline position &amp; rotation</div>
+      <div class="control-label" style="opacity:0.7">Tap sub headline, then drag the "Move" handle to reposition, or the round handle above to rotate.</div>
     </details>
     <div><b>Export</b></div>
     <div style="display:flex;gap:6px;">
@@ -669,7 +760,11 @@
   <div class="poster-wrap">
     <div class="poster" id="poster">
 
-      <div class="headline">
+      <div class="headline" id="headlineWrap">
+        <div class="headline-drag-handle" id="headlineDragHandle" title="Drag to move">⠿ Move</div>
+        <div class="rotate-handle" id="headlineRotateHandle" title="Drag to rotate, double-click to reset">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M21 12a9 9 0 1 1-3.06-6.78"/><path d="M21 3v6h-6"/></svg>
+        </div>
         <span class="line1" contenteditable="true">GAWIN MO</span>
         <span class="line2" contenteditable="true">MUNA ITO</span>
       </div>
@@ -678,6 +773,9 @@
 
       <div class="subhead-wrap" id="subheadWrap">
         <div class="subhead-drag-handle" id="subheadDragHandle" title="Drag to move">⠿ Move</div>
+        <div class="rotate-handle" id="subheadRotateHandle" title="Drag to rotate, double-click to reset">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M21 12a9 9 0 1 1-3.06-6.78"/><path d="M21 3v6h-6"/></svg>
+        </div>
         <div class="subhead" contenteditable="true">BAGO <span class="accent">MAG-UPGRADE</span> NG GPU!</div>
       </div>
 
@@ -696,6 +794,9 @@
         <div class="resize-handle resize-handle-r" data-resize="r" title="Drag to resize width"></div>
         <div class="resize-handle resize-handle-b" data-resize="b" title="Drag to resize height"></div>
         <div class="resize-handle resize-handle-br" data-resize="br" title="Drag to resize"></div>
+        <div class="rotate-handle" id="imageRotateHandle" title="Drag to rotate, double-click to reset">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M21 12a9 9 0 1 1-3.06-6.78"/><path d="M21 3v6h-6"/></svg>
+        </div>
       </div>
 
       <div class="footer-strip"></div>
@@ -748,16 +849,20 @@
 
   THEMES.plain = { bg: null, accent: "#ff5b00", accentDark: "#e64f00" };
 
+  let hasBackground = false;
+
   function applyTheme(name){
     const t = THEMES[name];
     if(!t) return;
     if(t.bg){
       poster.style.backgroundImage = `url(${t.bg})`;
       poster.style.backgroundColor = '';
+      hasBackground = true;
     } else {
       // Plain mode: strip any embedded/preset background entirely
       poster.style.backgroundImage = 'none';
       poster.style.backgroundColor = '#ffffff';
+      hasBackground = false;
     }
     root.style.setProperty('--accent', t.accent);
     root.style.setProperty('--accent-dark', t.accentDark);
@@ -836,6 +941,7 @@
       const dataUrl = evt.target.result;
       poster.style.backgroundImage = `url(${dataUrl})`;
       poster.style.backgroundColor = '';
+      hasBackground = true;
       bgUploadBox.classList.add('has-bg');
       bgUploadLabel.textContent = 'Change background';
       bgFilename.textContent = file.name;
@@ -900,6 +1006,7 @@
   bgResetBtn.addEventListener('click', ()=>{
     poster.style.backgroundImage = '';
     poster.style.backgroundColor = '#ffffff';
+    hasBackground = false;
     bgUploadBox.classList.remove('has-bg');
     bgUploadLabel.textContent = 'Upload background';
     bgFilename.textContent = '';
@@ -1017,6 +1124,103 @@
     el.addEventListener('click', ()=> openPanel('headlinePanel'));
   });
 
+  // ---------- Movable & rotatable headline ----------
+  const headlineWrap = document.getElementById('headlineWrap');
+  const headlineDragHandle = document.getElementById('headlineDragHandle');
+  const headlineRotateHandle = document.getElementById('headlineRotateHandle');
+
+  let headlineX = 0;
+  let headlineY = 0;
+  let headlineRotate = 0;
+
+  function selectHeadline(){
+    headlineWrap.classList.add('is-selected');
+    openPanel('headlinePanel');
+  }
+  function deselectHeadline(){
+    headlineWrap.classList.remove('is-selected');
+  }
+
+  headlineWrap.addEventListener('mousedown', selectHeadline);
+  document.addEventListener('mousedown', (e)=>{
+    if(!headlineWrap.contains(e.target)) deselectHeadline();
+  });
+
+  let headDragging = false;
+  let headDragStartX = 0, headDragStartY = 0;
+  let headDragOriginX = 0, headDragOriginY = 0;
+
+  headlineDragHandle.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    headDragging = true;
+    headDragStartX = e.clientX;
+    headDragStartY = e.clientY;
+    headDragOriginX = headlineX;
+    headDragOriginY = headlineY;
+    document.addEventListener('pointermove', onHeadlineDragMove);
+    document.addEventListener('pointerup', onHeadlineDragEnd);
+  });
+
+  function onHeadlineDragMove(e){
+    if(!headDragging) return;
+    const dx = (e.clientX - headDragStartX) / currentPreviewScale;
+    const dy = (e.clientY - headDragStartY) / currentPreviewScale;
+    headlineX = headDragOriginX + dx;
+    headlineY = headDragOriginY + dy;
+    root.style.setProperty('--headline-x', headlineX + 'px');
+    root.style.setProperty('--headline-y', headlineY + 'px');
+  }
+  function onHeadlineDragEnd(){
+    headDragging = false;
+    document.removeEventListener('pointermove', onHeadlineDragMove);
+    document.removeEventListener('pointerup', onHeadlineDragEnd);
+  }
+
+  let headRotating = false;
+  let headRotateCenterX = 0, headRotateCenterY = 0, headRotateStartAngle = 0, headRotateStartRotation = 0;
+
+  headlineRotateHandle.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    headRotating = true;
+    const rect = headlineWrap.getBoundingClientRect();
+    headRotateCenterX = rect.left + rect.width / 2;
+    headRotateCenterY = rect.top + rect.height / 2;
+    headRotateStartAngle = getAngleDeg(headRotateCenterX, headRotateCenterY, e.clientX, e.clientY);
+    headRotateStartRotation = headlineRotate;
+    document.addEventListener('pointermove', onHeadlineRotateMove);
+    document.addEventListener('pointerup', endHeadlineRotate);
+  });
+  headlineRotateHandle.addEventListener('click', (e) => e.stopPropagation());
+  headlineRotateHandle.addEventListener('dblclick', ()=>{
+    headlineRotate = 0;
+    root.style.setProperty('--headline-rotate', '0deg');
+  });
+
+  function onHeadlineRotateMove(e){
+    if(!headRotating) return;
+    const angle = getAngleDeg(headRotateCenterX, headRotateCenterY, e.clientX, e.clientY);
+    const delta = angle - headRotateStartAngle;
+    headlineRotate = headRotateStartRotation + delta;
+    root.style.setProperty('--headline-rotate', headlineRotate + 'deg');
+  }
+  function endHeadlineRotate(){
+    headRotating = false;
+    document.removeEventListener('pointermove', onHeadlineRotateMove);
+    document.removeEventListener('pointerup', endHeadlineRotate);
+  }
+
+  function resetHeadlinePos(){
+    headlineX = 0;
+    headlineY = 0;
+    headlineRotate = 0;
+    root.style.setProperty('--headline-x', '0px');
+    root.style.setProperty('--headline-y', '0px');
+    root.style.setProperty('--headline-rotate', '0deg');
+  }
+
+
   // Show/hide toggles for the divider line and footer strip
   const ruleEl = document.querySelector('.rule');
   const footerStripEl = document.querySelector('.footer-strip');
@@ -1033,7 +1237,6 @@
   // ---------- Draggable sub headline text box ----------
   const subheadWrap = document.getElementById('subheadWrap');
   const subheadDragHandle = document.getElementById('subheadDragHandle');
-  const subheadResetPosBtn = document.getElementById('subheadResetPosBtn');
 
   let subheadX = 0;
   let subheadY = 0;
@@ -1083,12 +1286,51 @@
     document.removeEventListener('pointerup', onSubheadDragEnd);
   }
 
-  subheadResetPosBtn.addEventListener('click', ()=>{
+  // ---------- Rotatable sub headline text box ----------
+  const subheadRotateHandle = document.getElementById('subheadRotateHandle');
+  let subheadRotate = 0;
+  let subRotating = false;
+  let subRotateCenterX = 0, subRotateCenterY = 0, subRotateStartAngle = 0, subRotateStartRotation = 0;
+
+  subheadRotateHandle.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    subRotating = true;
+    const rect = subheadWrap.getBoundingClientRect();
+    subRotateCenterX = rect.left + rect.width / 2;
+    subRotateCenterY = rect.top + rect.height / 2;
+    subRotateStartAngle = getAngleDeg(subRotateCenterX, subRotateCenterY, e.clientX, e.clientY);
+    subRotateStartRotation = subheadRotate;
+    document.addEventListener('pointermove', onSubheadRotateMove);
+    document.addEventListener('pointerup', endSubheadRotate);
+  });
+  subheadRotateHandle.addEventListener('click', (e) => e.stopPropagation());
+  subheadRotateHandle.addEventListener('dblclick', ()=>{
+    subheadRotate = 0;
+    root.style.setProperty('--subhead-rotate', '0deg');
+  });
+
+  function onSubheadRotateMove(e){
+    if(!subRotating) return;
+    const angle = getAngleDeg(subRotateCenterX, subRotateCenterY, e.clientX, e.clientY);
+    const delta = angle - subRotateStartAngle;
+    subheadRotate = subRotateStartRotation + delta;
+    root.style.setProperty('--subhead-rotate', subheadRotate + 'deg');
+  }
+  function endSubheadRotate(){
+    subRotating = false;
+    document.removeEventListener('pointermove', onSubheadRotateMove);
+    document.removeEventListener('pointerup', endSubheadRotate);
+  }
+
+  function resetSubheadPos(){
     subheadX = 0;
     subheadY = 0;
+    subheadRotate = 0;
     root.style.setProperty('--subhead-x', '0px');
     root.style.setProperty('--subhead-y', '0px');
-  });
+    root.style.setProperty('--subhead-rotate', '0deg');
+  }
 
   // ---------- Word-level style toolbar (bold / italic / size per word) ----------
   const wordToolbar = document.getElementById('wordToolbar');
@@ -1292,6 +1534,58 @@
     handle.addEventListener('click', (e) => e.stopPropagation());
   });
 
+  // ---------- Rotation (shared helper + product photo box) ----------
+  function getAngleDeg(cx, cy, x, y){
+    return Math.atan2(y - cy, x - cx) * 180 / Math.PI;
+  }
+
+  const imageRotateHandle = document.getElementById('imageRotateHandle');
+  let imageRotate = 0;
+  let imgRotating = false;
+  let imgRotateCenterX = 0, imgRotateCenterY = 0, imgRotateStartAngle = 0, imgRotateStartRotation = 0;
+
+  imageRotateHandle.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    imgRotating = true;
+    imageStageWrap.classList.add('is-rotating');
+    const rect = imageStageWrap.getBoundingClientRect();
+    imgRotateCenterX = rect.left + rect.width / 2;
+    imgRotateCenterY = rect.top + rect.height / 2;
+    imgRotateStartAngle = getAngleDeg(imgRotateCenterX, imgRotateCenterY, e.clientX, e.clientY);
+    imgRotateStartRotation = imageRotate;
+    document.addEventListener('pointermove', onImageRotateMove);
+    document.addEventListener('pointerup', endImageRotate);
+  });
+  imageRotateHandle.addEventListener('click', (e) => e.stopPropagation());
+  function resetImageRotate(){
+    imageRotate = 0;
+    root.style.setProperty('--image-rotate', '0deg');
+  }
+  imageRotateHandle.addEventListener('dblclick', resetImageRotate);
+
+  function onImageRotateMove(e){
+    if(!imgRotating) return;
+    const angle = getAngleDeg(imgRotateCenterX, imgRotateCenterY, e.clientX, e.clientY);
+    const delta = angle - imgRotateStartAngle;
+    imageRotate = imgRotateStartRotation + delta;
+    root.style.setProperty('--image-rotate', imageRotate + 'deg');
+  }
+  function endImageRotate(){
+    imgRotating = false;
+    imageStageWrap.classList.remove('is-rotating');
+    document.removeEventListener('pointermove', onImageRotateMove);
+    document.removeEventListener('pointerup', endImageRotate);
+  }
+
+  // ---------- Single "reset all" button: headline, sub headline, and product photo ----------
+  const resetAllPosBtn = document.getElementById('resetAllPosBtn');
+  resetAllPosBtn.addEventListener('click', ()=>{
+    resetHeadlinePos();
+    resetSubheadPos();
+    resetImageRotate();
+  });
+
   // Export function — shared by JPG and PNG buttons
   async function exportPoster(format){
     const btnJpg = document.getElementById('downloadBtnJpg');
@@ -1308,8 +1602,18 @@
       clone.style.top = '0';
       clone.style.left = '-99999px';
       clone.id = 'poster-export-clone';
-      clone.querySelectorAll('.resize-handle, .subhead-drag-handle').forEach(el => el.remove());
-      clone.querySelectorAll('.subhead-wrap').forEach(el => el.classList.remove('is-selected'));
+      clone.querySelectorAll('.resize-handle, .subhead-drag-handle, .headline-drag-handle, .rotate-handle').forEach(el => el.remove());
+      clone.querySelectorAll('.subhead-wrap, .headline').forEach(el => el.classList.remove('is-selected'));
+
+      const isJpg = format === 'jpg';
+      // PNG supports transparency: if no background image/color has been set (Plain
+      // theme, no custom bg uploaded), export with a transparent canvas instead of
+      // forcing white. JPG has no alpha channel, so it always stays opaque white.
+      const exportTransparent = !isJpg && !hasBackground;
+      if(exportTransparent){
+        clone.style.backgroundColor = 'transparent';
+        clone.style.backgroundImage = 'none';
+      }
       document.body.appendChild(clone);
 
       const canvas = await html2canvas(clone, {
@@ -1317,12 +1621,11 @@
         height: 1920,
         scale: 1,
         useCORS: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: exportTransparent ? null : '#ffffff'
       });
 
       document.body.removeChild(clone);
 
-      const isJpg = format === 'jpg';
       const dataUrl = canvas.toDataURL(isJpg ? 'image/jpeg' : 'image/png', isJpg ? 0.95 : undefined);
       const link = document.createElement('a');
       link.download = isJpg ? 'easypc-poster.jpg' : 'easypc-poster.png';
