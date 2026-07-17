@@ -1604,6 +1604,12 @@
       clone.id = 'poster-export-clone';
       clone.querySelectorAll('.resize-handle, .subhead-drag-handle, .headline-drag-handle, .rotate-handle').forEach(el => el.remove());
       clone.querySelectorAll('.subhead-wrap, .headline').forEach(el => el.classList.remove('is-selected'));
+      // Don't export the dashed "click to upload" placeholder box — only show
+      // the product photo area in the export if the user actually uploaded one.
+      if(!imageStage.classList.contains('has-image')){
+        const cloneImageStageWrap = clone.querySelector('#imageStageWrap');
+        if(cloneImageStageWrap) cloneImageStageWrap.remove();
+      }
 
       const isJpg = format === 'jpg';
       // PNG supports transparency: if no background image/color has been set (Plain
