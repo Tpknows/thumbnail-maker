@@ -24,6 +24,9 @@
     --subhead-y:0px;
     --subhead-rotate:0deg;
     --image-rotate:0deg;
+    --image-x:0px;
+    --image-y:0px;
+    --image-zoom:1;
     --headline-x:0px;
     --headline-y:0px;
     --headline-rotate:0deg;
@@ -275,12 +278,45 @@
     font-family:'Poppins',sans-serif;
   }
 
+  .range-slider{
+    flex:1;
+    -webkit-appearance:none;
+    appearance:none;
+    width:100%;
+    height:6px;
+    border-radius:999px;
+    background:#3a3a3a;
+    outline:none;
+    cursor:pointer;
+  }
+  .range-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    appearance:none;
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:var(--accent);
+    border:3px solid #fff;
+    box-shadow:0 2px 4px rgba(0,0,0,0.4);
+    cursor:pointer;
+  }
+  .range-slider::-moz-range-thumb{
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:var(--accent);
+    border:3px solid #fff;
+    box-shadow:0 2px 4px rgba(0,0,0,0.4);
+    cursor:pointer;
+    border:none;
+  }
+
   /* ---------- Scaled preview wrapper ---------- */
   .poster-wrap{
     width:300px;
     flex:none;
     max-width:48vw;
-    overflow:hidden;
+    overflow:visible;
     position:relative;
     box-shadow:0 20px 50px rgba(0,0,0,0.35);
     border-radius:4px;
@@ -299,7 +335,7 @@
     background-repeat:no-repeat;
     background-size:cover;
     background-position:center;
-    overflow:hidden;
+    overflow:visible;
   }
 
   /* ---------- Headline (editable) ---------- */
@@ -399,8 +435,8 @@
     margin:62px auto 0;
     width:90%;
     height:579px;
-    z-index:2;
-    transform:rotate(var(--image-rotate, 0deg));
+    z-index:6;
+    transform:translate(var(--image-x, 0px), var(--image-y, 0px)) rotate(var(--image-rotate, 0deg));
     transform-origin:center center;
   }
   .image-stage{
@@ -427,6 +463,8 @@
     background-position:center;
     background-size:contain;
     display:none;
+    transform:scale(var(--image-zoom, 1));
+    transform-origin:center center;
   }
   .image-stage.has-image .image-photo{ display:block; }
 
@@ -541,8 +579,7 @@
   }
   .image-stage-wrap .rotate-handle{
     top:-46px;
-    left:50%;
-    transform:translateX(-50%);
+    left:calc(50% + 100px);
   }
   .subhead-wrap .rotate-handle{
     top:-58px;
@@ -550,7 +587,37 @@
   }
   .image-stage-wrap:hover .rotate-handle,
   .image-stage-wrap.is-resizing .rotate-handle,
+  .image-stage-wrap.is-dragging .rotate-handle,
   .image-stage-wrap.is-rotating .rotate-handle{ opacity:1; }
+
+  .image-drag-handle{
+    position:absolute;
+    top:-46px;
+    left:50%;
+    transform:translateX(-50%);
+    background:var(--ink);
+    color:#fff;
+    font-size:16px;
+    font-weight:700;
+    padding:8px 16px;
+    border-radius:999px;
+    cursor:grab;
+    display:flex;
+    align-items:center;
+    gap:5px;
+    white-space:nowrap;
+    box-shadow:0 8px 18px rgba(0,0,0,0.3);
+    z-index:7;
+    opacity:0;
+    transition:opacity 0.15s;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  .image-drag-handle:active{ cursor:grabbing; }
+  .image-stage-wrap:hover .image-drag-handle,
+  .image-stage-wrap.is-resizing .image-drag-handle,
+  .image-stage-wrap.is-dragging .image-drag-handle,
+  .image-stage-wrap.is-rotating .image-drag-handle{ opacity:1; }
   .subhead-wrap.is-selected .rotate-handle{ opacity:1; }
 
   .word-toolbar{
@@ -634,6 +701,10 @@
     <div class="toolbar-row">
       <button class="btn btn-full" id="uploadBtn">Upload center image</button>
       <button class="btn btn-full" id="resetBtn">Reset center image</button>
+    </div>
+    <div class="control-label">Image size (zoom) — <span id="imageZoomValue">100%</span></div>
+    <div class="toolbar-row">
+      <input type="range" id="imageZoomSlider" class="range-slider" min="40" max="300" value="100">
     </div>
     <details class="section-block" id="headlinePanel">
       <summary class="section-title">Headline</summary>
@@ -794,6 +865,7 @@
         <div class="resize-handle resize-handle-r" data-resize="r" title="Drag to resize width"></div>
         <div class="resize-handle resize-handle-b" data-resize="b" title="Drag to resize height"></div>
         <div class="resize-handle resize-handle-br" data-resize="br" title="Drag to resize"></div>
+        <div class="image-drag-handle" id="imageDragHandle" title="Drag to move">⠿ Move</div>
         <div class="rotate-handle" id="imageRotateHandle" title="Drag to rotate, double-click to reset">
           <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M21 12a9 9 0 1 1-3.06-6.78"/><path d="M21 3v6h-6"/></svg>
         </div>
@@ -1477,16 +1549,21 @@
     imagePhoto.style.backgroundImage = '';
     imageStage.classList.remove('has-image');
     fileInput.value = '';
+    imageStageWrap.style.width = '';
+    imageStageWrap.style.height = '';
+    resetImagePos();
+    resetImageRotate();
+    resetImageZoom();
   });
 
   // ---------- Drag-to-resize the image upload box ----------
   const imageStageWrap = document.getElementById('imageStageWrap');
   const resizeHandles = imageStageWrap.querySelectorAll('.resize-handle');
 
-  const IMAGE_BOX_MIN_WIDTH = 200;
-  const IMAGE_BOX_MIN_HEIGHT = 200;
-  const IMAGE_BOX_MAX_WIDTH = 1000;
-  const IMAGE_BOX_MAX_HEIGHT = 1750;
+  const IMAGE_BOX_MIN_WIDTH = 80;
+  const IMAGE_BOX_MIN_HEIGHT = 80;
+  const IMAGE_BOX_MAX_WIDTH = 1080;
+  const IMAGE_BOX_MAX_HEIGHT = 1900;
 
   let resizeMode = null;
   let resizeStartX = 0;
@@ -1533,6 +1610,74 @@
     handle.addEventListener('pointerdown', (e) => beginResize(e, handle.dataset.resize));
     handle.addEventListener('click', (e) => e.stopPropagation());
   });
+
+  // ---------- Fully draggable product photo box (can move & overlap freely) ----------
+  const imageDragHandle = document.getElementById('imageDragHandle');
+  let imageX = 0;
+  let imageY = 0;
+  let imgDragging = false;
+  let imgDragStartX = 0, imgDragStartY = 0;
+  let imgDragOriginX = 0, imgDragOriginY = 0;
+
+  imageDragHandle.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    imgDragging = true;
+    imageStageWrap.classList.add('is-dragging');
+    imgDragStartX = e.clientX;
+    imgDragStartY = e.clientY;
+    imgDragOriginX = imageX;
+    imgDragOriginY = imageY;
+    document.addEventListener('pointermove', onImageDragMove);
+    document.addEventListener('pointerup', onImageDragEnd);
+  });
+  imageDragHandle.addEventListener('click', (e) => e.stopPropagation());
+
+  function onImageDragMove(e){
+    if(!imgDragging) return;
+    const dx = (e.clientX - imgDragStartX) / currentPreviewScale;
+    const dy = (e.clientY - imgDragStartY) / currentPreviewScale;
+    imageX = imgDragOriginX + dx;
+    imageY = imgDragOriginY + dy;
+    root.style.setProperty('--image-x', imageX + 'px');
+    root.style.setProperty('--image-y', imageY + 'px');
+  }
+  function onImageDragEnd(){
+    imgDragging = false;
+    imageStageWrap.classList.remove('is-dragging');
+    document.removeEventListener('pointermove', onImageDragMove);
+    document.removeEventListener('pointerup', onImageDragEnd);
+  }
+  function resetImagePos(){
+    imageX = 0;
+    imageY = 0;
+    root.style.setProperty('--image-x', '0px');
+    root.style.setProperty('--image-y', '0px');
+  }
+
+  // ---------- Image zoom (scale the photo bigger/smaller inside its box) ----------
+  const imageZoomSlider = document.getElementById('imageZoomSlider');
+  const imageZoomValue = document.getElementById('imageZoomValue');
+
+  function setImageZoom(percent){
+    const clamped = Math.min(300, Math.max(40, percent));
+    root.style.setProperty('--image-zoom', (clamped / 100));
+    imageZoomValue.textContent = Math.round(clamped) + '%';
+    imageZoomSlider.value = clamped;
+  }
+  imageZoomSlider.addEventListener('input', ()=>{
+    setImageZoom(Number(imageZoomSlider.value));
+  });
+  function resetImageZoom(){
+    setImageZoom(100);
+  }
+  // Ctrl/Cmd + scroll wheel over the photo box nudges the zoom for quick adjustments
+  imageStageWrap.addEventListener('wheel', (e)=>{
+    if(!imageStage.classList.contains('has-image')) return;
+    e.preventDefault();
+    const current = Number(imageZoomSlider.value);
+    setImageZoom(current + (e.deltaY < 0 ? 5 : -5));
+  }, { passive:false });
 
   // ---------- Rotation (shared helper + product photo box) ----------
   function getAngleDeg(cx, cy, x, y){
@@ -1584,6 +1729,8 @@
     resetHeadlinePos();
     resetSubheadPos();
     resetImageRotate();
+    resetImagePos();
+    resetImageZoom();
   });
 
   // Export function — shared by JPG and PNG buttons
@@ -1602,7 +1749,7 @@
       clone.style.top = '0';
       clone.style.left = '-99999px';
       clone.id = 'poster-export-clone';
-      clone.querySelectorAll('.resize-handle, .subhead-drag-handle, .headline-drag-handle, .rotate-handle').forEach(el => el.remove());
+      clone.querySelectorAll('.resize-handle, .subhead-drag-handle, .headline-drag-handle, .image-drag-handle, .rotate-handle').forEach(el => el.remove());
       clone.querySelectorAll('.subhead-wrap, .headline').forEach(el => el.classList.remove('is-selected'));
       // Don't export the dashed "click to upload" placeholder box — only show
       // the product photo area in the export if the user actually uploaded one.
