@@ -27,6 +27,8 @@
     --image-x:0px;
     --image-y:0px;
     --image-zoom:1;
+    --image-pan-x:0px;
+    --image-pan-y:0px;
     --headline-x:0px;
     --headline-y:0px;
     --headline-rotate:0deg;
@@ -455,7 +457,9 @@
     border-style:solid;
     border-color:transparent;
     background:transparent;
+    cursor:grab;
   }
+  .image-stage.is-panning{ cursor:grabbing; }
   .image-photo{
     width:100%;
     height:100%;
@@ -463,7 +467,7 @@
     background-position:center;
     background-size:contain;
     display:none;
-    transform:scale(var(--image-zoom, 1));
+    transform:translate(var(--image-pan-x, 0px), var(--image-pan-y, 0px)) scale(var(--image-zoom, 1));
     transform-origin:center center;
   }
   .image-stage.has-image .image-photo{ display:block; }
@@ -646,6 +650,23 @@
   .word-toolbar button.active{ background:var(--accent); }
   .word-toolbar button.word-toolbar-reset{ font-size:12px; font-weight:700; }
   .word-toolbar .word-toolbar-sep{ width:1px; background:rgba(255,255,255,0.15); margin:4px 2px; }
+  .word-toolbar-color{
+    width:32px; height:32px;
+    border-radius:7px;
+    overflow:hidden;
+    cursor:pointer;
+    display:flex;
+    flex:none;
+    background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);
+  }
+  .word-toolbar-color input[type="color"]{
+    opacity:0;
+    width:100%;
+    height:100%;
+    cursor:pointer;
+    border:none;
+    padding:0;
+  }
 
   .visibility-toggle{
     display:flex; align-items:center; gap:8px;
@@ -884,6 +905,10 @@
     <div class="word-toolbar-sep"></div>
     <button type="button" id="wtBigger" title="Bigger">A+</button>
     <button type="button" id="wtSmaller" title="Smaller">A-</button>
+    <div class="word-toolbar-sep"></div>
+    <label class="word-toolbar-color" id="wtColorSwatch" title="Text color">
+      <input type="color" id="wtColorInput" value="#ff5b00">
+    </label>
     <div class="word-toolbar-sep"></div>
     <button type="button" class="word-toolbar-reset" id="wtReset" title="Reset this word">Reset</button>
   </div>
@@ -1461,9 +1486,21 @@
     const span = getExactSpanForSelection(sel.getRangeAt(0));
     wtBold.classList.toggle('active', !!span && (span.style.fontWeight === '700' || span.style.fontWeight === 'bold'));
     wtItalic.classList.toggle('active', !!span && span.style.fontStyle === 'italic');
+    if(span && span.style.color){
+      const probe = document.createElement('div');
+      probe.style.color = span.style.color;
+      document.body.appendChild(probe);
+      const rgb = getComputedStyle(probe).color.match(/\d+/g);
+      document.body.removeChild(probe);
+      if(rgb){
+        const hex = '#' + rgb.slice(0,3).map(v => Math.min(255, +v).toString(16).padStart(2,'0')).join('');
+        wtColorInput.value = hex;
+      }
+    }
   }
 
   document.addEventListener('selectionchange', ()=>{
+    if(document.activeElement === wtColorInput) return;
     const sel = window.getSelection();
     if(!sel || !sel.rangeCount || sel.isCollapsed){ hideWordToolbar(); return; }
     const range = sel.getRangeAt(0);
@@ -1478,7 +1515,10 @@
     refreshToolbarButtonStates();
   });
 
-  wordToolbar.addEventListener('mousedown', (e)=> e.preventDefault());
+  wordToolbar.addEventListener('mousedown', (e)=>{
+    if(e.target.closest('#wtColorSwatch')) return;
+    e.preventDefault();
+  });
   window.addEventListener('scroll', hideWordToolbar, true);
   window.addEventListener('resize', hideWordToolbar);
 
@@ -1494,6 +1534,21 @@
     if(!span) return;
     span.style.fontStyle = (span.style.fontStyle === 'italic') ? '' : 'italic';
     refreshToolbarButtonStates();
+  });
+
+  // Free per-word/letter color — works on whatever text is selected, independent
+  // of the headline/subhead's line or accent color logic.
+  let activeColorSpan = null;
+  const wtColorSwatch = document.getElementById('wtColorSwatch');
+  const wtColorInput = document.getElementById('wtColorInput');
+  // Capture on mousedown (fires before the input takes focus and collapses the
+  // text selection) rather than click, or the selection would already be gone.
+  wtColorSwatch.addEventListener('mousedown', ()=>{
+    activeColorSpan = getOrCreateActiveSpan();
+  });
+  wtColorInput.addEventListener('input', ()=>{
+    if(!activeColorSpan) return;
+    activeColorSpan.style.color = wtColorInput.value;
   });
   wtBigger.addEventListener('click', ()=>{
     const span = getOrCreateActiveSpan();
@@ -1532,7 +1587,58 @@
   function openPicker(){ fileInput.click(); }
 
   uploadBtn.addEventListener('click', openPicker);
-  imageStage.addEventListener('click', openPicker);
+
+  // Dragging directly on the photo pans it within its frame (handy once zoomed in);
+  // a plain click/tap (no real movement) still opens the file picker to upload/replace.
+  let imagePanX = 0;
+  let imagePanY = 0;
+  let imgPanning = false;
+  let imgPanMoved = false;
+  let imgPanStartX = 0, imgPanStartY = 0;
+  let imgPanOriginX = 0, imgPanOriginY = 0;
+
+  imageStage.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    imgPanning = true;
+    imgPanMoved = false;
+    imgPanStartX = e.clientX;
+    imgPanStartY = e.clientY;
+    imgPanOriginX = imagePanX;
+    imgPanOriginY = imagePanY;
+    document.addEventListener('pointermove', onImagePanMove);
+    document.addEventListener('pointerup', onImagePanEnd);
+  });
+
+  function onImagePanMove(e){
+    if(!imgPanning) return;
+    const dx = e.clientX - imgPanStartX;
+    const dy = e.clientY - imgPanStartY;
+    if(!imgPanMoved && Math.hypot(dx, dy) > 4){
+      if(!imageStage.classList.contains('has-image')) return; // nothing to pan yet
+      imgPanMoved = true;
+      imageStage.classList.add('is-panning');
+    }
+    if(!imgPanMoved) return;
+    imagePanX = imgPanOriginX + dx / currentPreviewScale;
+    imagePanY = imgPanOriginY + dy / currentPreviewScale;
+    root.style.setProperty('--image-pan-x', imagePanX + 'px');
+    root.style.setProperty('--image-pan-y', imagePanY + 'px');
+  }
+  function onImagePanEnd(){
+    imgPanning = false;
+    imageStage.classList.remove('is-panning');
+    document.removeEventListener('pointermove', onImagePanMove);
+    document.removeEventListener('pointerup', onImagePanEnd);
+    if(!imgPanMoved){
+      openPicker();
+    }
+  }
+  function resetImagePan(){
+    imagePanX = 0;
+    imagePanY = 0;
+    root.style.setProperty('--image-pan-x', '0px');
+    root.style.setProperty('--image-pan-y', '0px');
+  }
 
   fileInput.addEventListener('change', (e)=>{
     const file = e.target.files[0];
@@ -1554,6 +1660,7 @@
     resetImagePos();
     resetImageRotate();
     resetImageZoom();
+    resetImagePan();
   });
 
   // ---------- Drag-to-resize the image upload box ----------
@@ -1731,6 +1838,7 @@
     resetImageRotate();
     resetImagePos();
     resetImageZoom();
+    resetImagePan();
   });
 
   // Export function — shared by JPG and PNG buttons
