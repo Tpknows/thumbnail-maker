@@ -176,7 +176,7 @@
   .theme-btn[data-theme="stories"]{ background:#14b8a6; }
   .theme-btn[data-theme="mistake"]{ background:#cc1f1f; }
   .theme-btn[data-theme="howto"]{ background:#2fbf3a; }
-  .theme-btn[data-theme="proinsights"]{ background:#2fbf3a; }
+  .theme-btn[data-theme="proinsights"]{ background:#2563eb; }
   .theme-btn[data-theme="plain"]{ background:#5a5a5a; }
 
   .toolbar-row{ display:flex; gap:6px; align-items:center; }
@@ -450,12 +450,10 @@
     align-items:center;
     justify-content:center;
     background:rgba(0,0,0,0.035);
-    border:5px dashed rgba(0,0,0,0.18);
+    border:none;
     cursor:pointer;
   }
   .image-stage.has-image{
-    border-style:solid;
-    border-color:transparent;
     background:transparent;
     cursor:grab;
   }
@@ -465,7 +463,7 @@
     height:100%;
     background-repeat:no-repeat;
     background-position:center;
-    background-size:contain;
+    background-size:100% 100%;
     display:none;
     transform:translate(var(--image-pan-x, 0px), var(--image-pan-y, 0px)) scale(var(--image-zoom, 1));
     transform-origin:center center;
@@ -1667,10 +1665,10 @@
   const imageStageWrap = document.getElementById('imageStageWrap');
   const resizeHandles = imageStageWrap.querySelectorAll('.resize-handle');
 
-  const IMAGE_BOX_MIN_WIDTH = 80;
-  const IMAGE_BOX_MIN_HEIGHT = 80;
-  const IMAGE_BOX_MAX_WIDTH = 1080;
-  const IMAGE_BOX_MAX_HEIGHT = 1900;
+  const IMAGE_BOX_MIN_WIDTH = 10;
+  const IMAGE_BOX_MIN_HEIGHT = 10;
+  const IMAGE_BOX_MAX_WIDTH = Infinity;
+  const IMAGE_BOX_MAX_HEIGHT = Infinity;
 
   let resizeMode = null;
   let resizeStartX = 0;
@@ -1695,13 +1693,39 @@
     if(!resizeMode) return;
     const dx = (e.clientX - resizeStartX) / currentPreviewScale;
     const dy = (e.clientY - resizeStartY) / currentPreviewScale;
+    const lockAspect = e.shiftKey;
+    const aspect = resizeStartWidth / resizeStartHeight;
+
+    let newWidth = resizeStartWidth;
+    let newHeight = resizeStartHeight;
 
     if(resizeMode === 'r' || resizeMode === 'br'){
-      const newWidth = Math.min(IMAGE_BOX_MAX_WIDTH, Math.max(IMAGE_BOX_MIN_WIDTH, resizeStartWidth + dx));
-      imageStageWrap.style.width = newWidth + 'px';
+      newWidth = Math.min(IMAGE_BOX_MAX_WIDTH, Math.max(IMAGE_BOX_MIN_WIDTH, resizeStartWidth + dx));
     }
     if(resizeMode === 'b' || resizeMode === 'br'){
-      const newHeight = Math.min(IMAGE_BOX_MAX_HEIGHT, Math.max(IMAGE_BOX_MIN_HEIGHT, resizeStartHeight + dy));
+      newHeight = Math.min(IMAGE_BOX_MAX_HEIGHT, Math.max(IMAGE_BOX_MIN_HEIGHT, resizeStartHeight + dy));
+    }
+
+    if(lockAspect){
+      if(resizeMode === 'r'){
+        newHeight = Math.max(IMAGE_BOX_MIN_HEIGHT, newWidth / aspect);
+      } else if(resizeMode === 'b'){
+        newWidth = Math.max(IMAGE_BOX_MIN_WIDTH, newHeight * aspect);
+      } else if(resizeMode === 'br'){
+        // Use whichever axis moved proportionally more to drive a uniform scale,
+        // just like holding Shift while corner-dragging in Photoshop.
+        const widthScale = newWidth / resizeStartWidth;
+        const heightScale = newHeight / resizeStartHeight;
+        const scale = Math.abs(widthScale - 1) > Math.abs(heightScale - 1) ? widthScale : heightScale;
+        newWidth = Math.max(IMAGE_BOX_MIN_WIDTH, resizeStartWidth * scale);
+        newHeight = Math.max(IMAGE_BOX_MIN_HEIGHT, resizeStartHeight * scale);
+      }
+    }
+
+    if(resizeMode === 'r' || resizeMode === 'br' || lockAspect){
+      imageStageWrap.style.width = newWidth + 'px';
+    }
+    if(resizeMode === 'b' || resizeMode === 'br' || lockAspect){
       imageStageWrap.style.height = newHeight + 'px';
     }
   }
