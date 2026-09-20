@@ -439,8 +439,6 @@
   .image-stage{
     position:absolute;
     inset:0;
-    border-radius:36px;
-    overflow:hidden;
     display:flex;
     align-items:center;
     justify-content:center;
@@ -458,7 +456,7 @@
     height:100%;
     background-repeat:no-repeat;
     background-position:center;
-    background-size:cover;
+    background-size:contain;
     display:none;
     transform:translate(var(--image-pan-x, 0px), var(--image-pan-y, 0px)) scale(var(--image-zoom, 1));
     transform-origin:center center;
