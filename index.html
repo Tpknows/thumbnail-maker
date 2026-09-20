@@ -11,9 +11,7 @@
   :root{
     --accent:#ff5b00;
     --accent-dark:#e64f00;
-    --paper:#f4f4f2;
     --ink:#0e0e0e;
-    --white:#ffffff;
     --headline-font:'Anton', sans-serif;
     --subhead-font:'Poppins', sans-serif;
     --line1-color:#0e0e0e;
@@ -323,10 +321,6 @@
     box-shadow:0 20px 50px rgba(0,0,0,0.35);
     border-radius:4px;
   }
-  .poster-wrap.tall{
-    /* recalculated by JS on resize if needed */
-  }
-
   /* ---------- Actual export-size poster: 1080x1920 ---------- */
   .poster{
     position:absolute;
@@ -693,7 +687,7 @@
       <button class="theme-btn" data-theme="mistake">MISTAKE<br>AVOIDANCE</button>
       <button class="theme-btn" data-theme="howto">TECH<br>HOW-TO'S</button>
       <button class="theme-btn" data-theme="proinsights">PRO<br>INSIGHTS</button>
-      <button class="theme-btn" data-theme="plain" id="plainThemeBtn">PLAIN<br>(NO BG)</button>
+      <button class="theme-btn" data-theme="plain">PLAIN<br>(NO BG)</button>
     </div>
     </div>
 
@@ -964,7 +958,6 @@
     document.querySelectorAll('.theme-btn').forEach(b=>{
       b.classList.toggle('active', b.dataset.theme === name);
     });
-    document.querySelectorAll('.custom-theme-item').forEach(i=>i.classList.remove('active'));
     document.querySelectorAll('.accent-swatch-row .swatch:not(.custom-swatch)').forEach(s=>{
       s.classList.toggle('active', s.dataset.color === t.accent);
     });
@@ -1042,7 +1035,6 @@
       bgFilename.textContent = file.name;
       // Deselect preset theme buttons since the background no longer matches any of them
       document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll('.custom-theme-item').forEach(i=>i.classList.remove('active'));
       // Auto-match the accent color to the new background
       extractAccentColor(dataUrl, (hex)=>{
         if(!hex) return;
