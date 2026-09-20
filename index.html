@@ -70,13 +70,9 @@
     gap:3px;
     font-size:11px;
     color:#ddd;
-    overflow-y:auto;
-    scrollbar-width:none;
-    -ms-overflow-style:none;
     position:sticky;
     top:20px;
   }
-  .toolbar::-webkit-scrollbar{ display:none; }
   .toolbar b{ color:#fff; }
 
   .mode-tabs{
@@ -376,7 +372,7 @@
   }
   .headline.is-selected .headline-drag-handle{ display:flex; align-items:center; }
   .headline-drag-handle:active{ cursor:grabbing; }
-  .headline.is-selected .rotate-handle{ opacity:1; }
+  .headline.is-selected .rotate-handle{ opacity:1; pointer-events:auto; }
   .headline .rotate-handle{
     top:-58px;
     left:calc(50% + 120px);
@@ -432,7 +428,7 @@
   /* ---------- Image upload area (middle) ---------- */
   .image-stage-wrap{
     position:relative;
-    margin:62px auto 0;
+    margin:110px auto 0;
     width:90%;
     height:579px;
     z-index:6;
@@ -538,10 +534,11 @@
     box-shadow:0 2px 6px rgba(0,0,0,0.35);
     z-index:6;
     opacity:0;
+    pointer-events:none;
     transition:opacity 0.15s;
   }
   .image-stage-wrap:hover .resize-handle,
-  .image-stage-wrap.is-resizing .resize-handle{ opacity:1; }
+  .image-stage-wrap.is-resizing .resize-handle{ opacity:1; pointer-events:auto; }
   .resize-handle-r{ width:16px; height:64px; right:-8px; top:50%; transform:translateY(-50%); border-radius:8px; cursor:ew-resize; }
   .resize-handle-b{ width:64px; height:16px; bottom:-8px; left:50%; transform:translateX(-50%); border-radius:8px; cursor:ns-resize; }
   .resize-handle-br{ width:26px; height:26px; right:-13px; bottom:-13px; border-radius:8px; cursor:nwse-resize; }
@@ -559,6 +556,7 @@
     justify-content:center;
     z-index:6;
     opacity:0;
+    pointer-events:none;
     transition:opacity 0.15s;
     cursor:grab;
     -webkit-user-select:none;
@@ -586,7 +584,7 @@
   .image-stage-wrap:hover .rotate-handle,
   .image-stage-wrap.is-resizing .rotate-handle,
   .image-stage-wrap.is-dragging .rotate-handle,
-  .image-stage-wrap.is-rotating .rotate-handle{ opacity:1; }
+  .image-stage-wrap.is-rotating .rotate-handle{ opacity:1; pointer-events:auto; }
 
   .image-drag-handle{
     position:absolute;
@@ -607,6 +605,7 @@
     box-shadow:0 8px 18px rgba(0,0,0,0.3);
     z-index:7;
     opacity:0;
+    pointer-events:none;
     transition:opacity 0.15s;
     -webkit-user-select:none;
     user-select:none;
@@ -615,8 +614,8 @@
   .image-stage-wrap:hover .image-drag-handle,
   .image-stage-wrap.is-resizing .image-drag-handle,
   .image-stage-wrap.is-dragging .image-drag-handle,
-  .image-stage-wrap.is-rotating .image-drag-handle{ opacity:1; }
-  .subhead-wrap.is-selected .rotate-handle{ opacity:1; }
+  .image-stage-wrap.is-rotating .image-drag-handle{ opacity:1; pointer-events:auto; }
+  .subhead-wrap.is-selected .rotate-handle{ opacity:1; pointer-events:auto; }
 
   .word-toolbar{
     position:fixed;
@@ -949,9 +948,6 @@
     poster.style.transform = `scale(${scale})`;
     const posterH = Math.round(1920 * scale);
     posterWrap.style.height = posterH + 'px';
-    const toolbar = document.querySelector('.toolbar');
-    toolbar.style.height = posterH + 'px';
-    toolbar.style.maxHeight = posterH + 'px';
   }
   window.addEventListener('resize', scalePreview);
   // Defer so layout is fully painted before we read clientWidth
