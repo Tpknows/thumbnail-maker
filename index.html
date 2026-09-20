@@ -539,8 +539,6 @@
   }
   .image-stage-wrap:hover .resize-handle,
   .image-stage-wrap.is-resizing .resize-handle{ opacity:1; pointer-events:auto; }
-  .resize-handle-r{ width:16px; height:64px; right:-8px; top:50%; transform:translateY(-50%); border-radius:8px; cursor:ew-resize; }
-  .resize-handle-b{ width:64px; height:16px; bottom:-8px; left:50%; transform:translateX(-50%); border-radius:8px; cursor:ns-resize; }
   .resize-handle-br{ width:26px; height:26px; right:-13px; bottom:-13px; border-radius:8px; cursor:nwse-resize; }
 
   .rotate-handle{
@@ -895,8 +893,6 @@
           <div>CLICK TO UPLOAD<br>PRODUCT IMAGE</div>
         </div>
         </div>
-        <div class="resize-handle resize-handle-r" data-resize="r" title="Drag to resize width"></div>
-        <div class="resize-handle resize-handle-b" data-resize="b" title="Drag to resize height"></div>
         <div class="resize-handle resize-handle-br" data-resize="br" title="Drag to resize"></div>
         <div class="image-drag-handle" id="imageDragHandle" title="Drag to move">⠿ Move</div>
         <div class="rotate-handle" id="imageRotateHandle" title="Drag to rotate, double-click to reset">
@@ -1652,7 +1648,19 @@
     if(!file) return;
     const reader = new FileReader();
     reader.onload = (evt)=>{
-      imagePhoto.style.backgroundImage = `url(${evt.target.result})`;
+      const dataUrl = evt.target.result;
+      const probe = new Image();
+      probe.onload = () => {
+        // Snap the box to the photo's own aspect ratio so it has no empty
+        // letterboxed edge - the resize handle then sits right at the
+        // photo's actual visible corner instead of floating off of it.
+        const aspect = probe.naturalWidth / probe.naturalHeight;
+        const width = imageStageWrap.offsetWidth;
+        imageStageWrap.style.width = width + 'px';
+        imageStageWrap.style.height = Math.round(width / aspect) + 'px';
+      };
+      probe.src = dataUrl;
+      imagePhoto.style.backgroundImage = `url(${dataUrl})`;
       imageStage.classList.add('has-image');
     };
     reader.readAsDataURL(file);
@@ -1702,41 +1710,18 @@
     if(!resizeMode) return;
     const dx = (e.clientX - resizeStartX) / currentPreviewScale;
     const dy = (e.clientY - resizeStartY) / currentPreviewScale;
-    const lockAspect = e.shiftKey;
-    const aspect = resizeStartWidth / resizeStartHeight;
 
-    let newWidth = resizeStartWidth;
-    let newHeight = resizeStartHeight;
+    // Always scale proportionally from the corner - like Photoshop's
+    // corner-drag transform - so the box (and the resize handle riding on
+    // its corner) never drifts out of sync with the photo's own shape.
+    const rawWidth = Math.min(IMAGE_BOX_MAX_WIDTH, Math.max(IMAGE_BOX_MIN_WIDTH, resizeStartWidth + dx));
+    const rawHeight = Math.min(IMAGE_BOX_MAX_HEIGHT, Math.max(IMAGE_BOX_MIN_HEIGHT, resizeStartHeight + dy));
+    const widthScale = rawWidth / resizeStartWidth;
+    const heightScale = rawHeight / resizeStartHeight;
+    const scale = Math.abs(widthScale - 1) > Math.abs(heightScale - 1) ? widthScale : heightScale;
 
-    if(resizeMode === 'r' || resizeMode === 'br'){
-      newWidth = Math.min(IMAGE_BOX_MAX_WIDTH, Math.max(IMAGE_BOX_MIN_WIDTH, resizeStartWidth + dx));
-    }
-    if(resizeMode === 'b' || resizeMode === 'br'){
-      newHeight = Math.min(IMAGE_BOX_MAX_HEIGHT, Math.max(IMAGE_BOX_MIN_HEIGHT, resizeStartHeight + dy));
-    }
-
-    if(lockAspect){
-      if(resizeMode === 'r'){
-        newHeight = Math.max(IMAGE_BOX_MIN_HEIGHT, newWidth / aspect);
-      } else if(resizeMode === 'b'){
-        newWidth = Math.max(IMAGE_BOX_MIN_WIDTH, newHeight * aspect);
-      } else if(resizeMode === 'br'){
-        // Use whichever axis moved proportionally more to drive a uniform scale,
-        // just like holding Shift while corner-dragging in Photoshop.
-        const widthScale = newWidth / resizeStartWidth;
-        const heightScale = newHeight / resizeStartHeight;
-        const scale = Math.abs(widthScale - 1) > Math.abs(heightScale - 1) ? widthScale : heightScale;
-        newWidth = Math.max(IMAGE_BOX_MIN_WIDTH, resizeStartWidth * scale);
-        newHeight = Math.max(IMAGE_BOX_MIN_HEIGHT, resizeStartHeight * scale);
-      }
-    }
-
-    if(resizeMode === 'r' || resizeMode === 'br' || lockAspect){
-      imageStageWrap.style.width = newWidth + 'px';
-    }
-    if(resizeMode === 'b' || resizeMode === 'br' || lockAspect){
-      imageStageWrap.style.height = newHeight + 'px';
-    }
+    imageStageWrap.style.width = Math.max(IMAGE_BOX_MIN_WIDTH, resizeStartWidth * scale) + 'px';
+    imageStageWrap.style.height = Math.max(IMAGE_BOX_MIN_HEIGHT, resizeStartHeight * scale) + 'px';
   }
 
   function endResize(){
