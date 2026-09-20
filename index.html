@@ -190,6 +190,7 @@
     font-family:'Poppins',sans-serif;
   }
   .btn:hover{ filter:brightness(1.15); }
+  .btn:disabled{ opacity:0.4; cursor:default; filter:none; }
   .toolbar-row .btn.btn-full{
     flex:1;
     text-align:center;
@@ -457,7 +458,7 @@
     height:100%;
     background-repeat:no-repeat;
     background-position:center;
-    background-size:100% 100%;
+    background-size:cover;
     display:none;
     transform:translate(var(--image-pan-x, 0px), var(--image-pan-y, 0px)) scale(var(--image-zoom, 1));
     transform-origin:center center;
@@ -708,6 +709,10 @@
     <input type="file" id="bgFileInput" accept="image/*" style="display:none">
 
     <div><b>Edit content</b> — tap text to edit, tap center box for product photo.</div>
+    <div class="toolbar-row">
+      <button class="btn btn-full" id="undoBtn" disabled title="Ctrl+Z">↶ Undo</button>
+      <button class="btn btn-full" id="redoBtn" disabled title="Ctrl+Y">↷ Redo</button>
+    </div>
     <div class="toolbar-row">
       <button class="btn btn-full" id="resetAllPosBtn">Reset all positions &amp; rotation</button>
     </div>
@@ -1920,6 +1925,186 @@
 
   document.getElementById('downloadBtnJpg').addEventListener('click', () => exportPoster('jpg'));
   document.getElementById('downloadBtnPng').addEventListener('click', () => exportPoster('png'));
+
+  // ---------- Undo / Redo ----------
+  // Every user-visible setting lives in one of: CSS custom properties on <html>,
+  // the headline/subhead contenteditable markup, or a handful of element
+  // states below — so a full snapshot of those is enough to time-travel the
+  // whole poster without touching each drag/rotate/type handler individually.
+  const CSS_VARS_TO_TRACK = [
+    '--accent','--accent-dark','--headline-font','--subhead-font',
+    '--line1-color','--line2-color','--subhead-color','--subhead-accent-color',
+    '--subhead-x','--subhead-y','--subhead-rotate','--image-rotate',
+    '--image-x','--image-y','--image-zoom','--image-pan-x','--image-pan-y',
+    '--headline-x','--headline-y','--headline-rotate'
+  ];
+
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  const undoStack = [];
+  const redoStack = [];
+  const UNDO_LIMIT = 60;
+  let isRestoring = false;
+  let snapshotTimer = null;
+  let currentState = null;
+
+  function captureState(){
+    const computed = getComputedStyle(root);
+    const cssVars = {};
+    CSS_VARS_TO_TRACK.forEach(v => { cssVars[v] = computed.getPropertyValue(v).trim(); });
+    return {
+      cssVars,
+      headlineLine1: headlineWrap.querySelector('.line1').innerHTML,
+      headlineLine2: headlineWrap.querySelector('.line2').innerHTML,
+      subheadHTML: document.querySelector('.subhead').innerHTML,
+      posterBg: poster.style.backgroundImage,
+      posterBgColor: poster.style.backgroundColor,
+      hasBackground,
+      activeTheme: document.querySelector('.theme-btn.active') ? document.querySelector('.theme-btn.active').dataset.theme : null,
+      bgHasBg: bgUploadBox.classList.contains('has-bg'),
+      bgUploadLabel: bgUploadLabel.textContent,
+      bgFilename: bgFilename.textContent,
+      hasImage: imageStage.classList.contains('has-image'),
+      imagePhotoBg: imagePhoto.style.backgroundImage,
+      imageBoxWidth: imageStageWrap.style.width,
+      imageBoxHeight: imageStageWrap.style.height,
+      ruleHidden: ruleEl.classList.contains('is-hidden'),
+      footerHidden: footerStripEl.classList.contains('is-hidden'),
+      ruleChecked: ruleToggle.checked,
+      footerChecked: footerStripToggle.checked,
+      headlineFontHTML: headlineFontSelect.innerHTML,
+      headlineFontValue: headlineFontSelect.value,
+      subheadFontHTML: subheadFontSelect.innerHTML,
+      subheadFontValue: subheadFontSelect.value,
+      colorPickerValue: colorPicker.value
+    };
+  }
+
+  // Re-derives which color swatch should look "active" from the restored CSS
+  // variable, the same way applyTheme() already does for the theme buttons.
+  function refreshSwatchActiveStates(){
+    document.querySelectorAll('.swatch-row').forEach(row=>{
+      const cssvar = row.dataset.cssvar;
+      const value = getComputedStyle(root).getPropertyValue(cssvar).trim();
+      row.querySelectorAll('.swatch:not(.custom-swatch)').forEach(sw=>{
+        sw.classList.toggle('active', sw.dataset.color === value);
+      });
+    });
+    const accentVal = getComputedStyle(root).getPropertyValue('--accent').trim();
+    accentSwatches.forEach(sw=>{
+      sw.classList.toggle('active', sw.dataset.color === accentVal);
+    });
+  }
+
+  function restoreState(state){
+    isRestoring = true;
+    CSS_VARS_TO_TRACK.forEach(v => root.style.setProperty(v, state.cssVars[v]));
+    headlineWrap.querySelector('.line1').innerHTML = state.headlineLine1;
+    headlineWrap.querySelector('.line2').innerHTML = state.headlineLine2;
+    document.querySelector('.subhead').innerHTML = state.subheadHTML;
+    poster.style.backgroundImage = state.posterBg;
+    poster.style.backgroundColor = state.posterBgColor;
+    hasBackground = state.hasBackground;
+    document.querySelectorAll('.theme-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.theme === state.activeTheme);
+    });
+    bgUploadBox.classList.toggle('has-bg', state.bgHasBg);
+    bgUploadLabel.textContent = state.bgUploadLabel;
+    bgFilename.textContent = state.bgFilename;
+    imageStage.classList.toggle('has-image', state.hasImage);
+    imagePhoto.style.backgroundImage = state.imagePhotoBg;
+    imageStageWrap.style.width = state.imageBoxWidth;
+    imageStageWrap.style.height = state.imageBoxHeight;
+    ruleEl.classList.toggle('is-hidden', state.ruleHidden);
+    footerStripEl.classList.toggle('is-hidden', state.footerHidden);
+    ruleToggle.checked = state.ruleChecked;
+    footerStripToggle.checked = state.footerChecked;
+    if(headlineFontSelect.innerHTML !== state.headlineFontHTML) headlineFontSelect.innerHTML = state.headlineFontHTML;
+    headlineFontSelect.value = state.headlineFontValue;
+    if(subheadFontSelect.innerHTML !== state.subheadFontHTML) subheadFontSelect.innerHTML = state.subheadFontHTML;
+    subheadFontSelect.value = state.subheadFontValue;
+    colorPicker.value = state.colorPickerValue;
+    refreshSwatchActiveStates();
+    isRestoring = false;
+  }
+
+  function updateUndoRedoButtons(){
+    undoBtn.disabled = undoStack.length === 0;
+    redoBtn.disabled = redoStack.length === 0;
+  }
+
+  function pushSnapshot(){
+    if(isRestoring) return;
+    const newState = captureState();
+    if(currentState && JSON.stringify(currentState) === JSON.stringify(newState)) return;
+    if(currentState) undoStack.push(currentState);
+    currentState = newState;
+    if(undoStack.length > UNDO_LIMIT) undoStack.shift();
+    redoStack.length = 0;
+    updateUndoRedoButtons();
+  }
+
+  function scheduleSnapshot(delay){
+    if(isRestoring) return;
+    if(snapshotTimer) clearTimeout(snapshotTimer);
+    if(delay === 0){ pushSnapshot(); return; }
+    snapshotTimer = setTimeout(pushSnapshot, delay);
+  }
+
+  function flushPendingSnapshot(){
+    if(snapshotTimer){ clearTimeout(snapshotTimer); snapshotTimer = null; pushSnapshot(); }
+  }
+
+  function undo(){
+    flushPendingSnapshot();
+    if(!undoStack.length) return;
+    redoStack.push(currentState);
+    currentState = undoStack.pop();
+    restoreState(currentState);
+    updateUndoRedoButtons();
+  }
+
+  function redo(){
+    if(!redoStack.length) return;
+    undoStack.push(currentState);
+    currentState = redoStack.pop();
+    restoreState(currentState);
+    updateUndoRedoButtons();
+  }
+
+  undoBtn.addEventListener('click', undo);
+  redoBtn.addEventListener('click', redo);
+
+  document.addEventListener('keydown', (e)=>{
+    const key = e.key.toLowerCase();
+    if((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey){
+      e.preventDefault();
+      undo();
+    } else if((e.ctrlKey || e.metaKey) && (key === 'y' || (key === 'z' && e.shiftKey))){
+      e.preventDefault();
+      redo();
+    }
+  });
+
+  // Every drag/rotate/resize/pan gesture in this app ends on a pointerup, so
+  // listening once here (instead of inside each individual handler) is enough
+  // to catch all of them.
+  document.addEventListener('pointerup', ()=> scheduleSnapshot(0));
+  // Continuous input (typing, slider/color dragging) is debounced so it collapses
+  // into one undo step per pause instead of one per keystroke/tick.
+  document.addEventListener('input', ()=> scheduleSnapshot(500));
+  // Discrete commits: dropdowns, checkboxes, a closed color picker, a chosen file.
+  document.addEventListener('change', ()=> scheduleSnapshot(0));
+  // Button/swatch clicks mutate state synchronously in their own handler, which
+  // (via DOM bubbling) always runs before this delegated listener sees the click.
+  document.addEventListener('click', (e)=>{
+    if(e.target.closest('#undoBtn, #redoBtn')) return;
+    if(e.target.closest('button, .swatch:not(.custom-swatch)')) scheduleSnapshot(0);
+  });
+
+  // Seed the baseline so the very first user action has something to undo back to.
+  currentState = captureState();
+  updateUndoRedoButtons();
 </script>
 
 </body>
