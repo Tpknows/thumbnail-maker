@@ -724,6 +724,11 @@
     <div class="toolbar-row">
       <input type="range" id="imageZoomSlider" class="range-slider" min="40" max="300" value="100">
     </div>
+    <div class="control-label">Image layer order</div>
+    <div class="toolbar-row">
+      <button class="btn btn-full" id="imageFrontBtn">Bring to front</button>
+      <button class="btn btn-full" id="imageBackBtn">Send to back</button>
+    </div>
     <details class="section-block" id="headlinePanel">
       <summary class="section-title">Headline</summary>
       <div class="control-label">Font</div>
@@ -764,6 +769,11 @@
       </div>
       <div class="control-label">Headline position &amp; rotation</div>
       <div class="control-label" style="opacity:0.7">Tap the headline, then drag the "Move" handle to reposition, or the round handle above to rotate.</div>
+      <div class="control-label">Layer order</div>
+      <div class="toolbar-row">
+        <button class="btn" id="headlineFrontBtn">Bring to front</button>
+        <button class="btn" id="headlineBackBtn">Send to back</button>
+      </div>
     </details>
 
     <details class="section-block" id="subheadPanel">
@@ -803,6 +813,11 @@
         <div class="swatch" data-color="#9333ea" style="background:#9333ea"></div>
         <div class="swatch" data-color="#0e0e0e" style="background:#0e0e0e"></div>
         <label class="swatch custom-swatch"><input type="color" value="#ff5b00"></label>
+      </div>
+      <div class="control-label">Layer order</div>
+      <div class="toolbar-row">
+        <button class="btn" id="subheadFrontBtn">Bring to front</button>
+        <button class="btn" id="subheadBackBtn">Send to back</button>
       </div>
     </details>
 
@@ -1851,6 +1866,33 @@
     document.removeEventListener('pointerup', endImageRotate);
   }
 
+  // ---------- Layer order (bring to front / send to back) ----------
+  // Headline/subhead/image can all be dragged freely, so once they overlap the
+  // fixed CSS z-index (2/5/6) no longer reflects what the user wants on top.
+  // Two running counters — one above, one below those baseline values — let
+  // "bring to front"/"send to back" keep stacking correctly across repeated clicks.
+  let zTopCounter = 10;
+  let zBottomCounter = 0;
+  function bringToFront(el){
+    zTopCounter += 1;
+    el.style.zIndex = zTopCounter;
+  }
+  function sendToBack(el){
+    zBottomCounter -= 1;
+    el.style.zIndex = zBottomCounter;
+  }
+  function resetLayerOrder(){
+    headlineWrap.style.zIndex = '';
+    subheadWrap.style.zIndex = '';
+    imageStageWrap.style.zIndex = '';
+  }
+  document.getElementById('headlineFrontBtn').addEventListener('click', ()=> bringToFront(headlineWrap));
+  document.getElementById('headlineBackBtn').addEventListener('click', ()=> sendToBack(headlineWrap));
+  document.getElementById('subheadFrontBtn').addEventListener('click', ()=> bringToFront(subheadWrap));
+  document.getElementById('subheadBackBtn').addEventListener('click', ()=> sendToBack(subheadWrap));
+  document.getElementById('imageFrontBtn').addEventListener('click', ()=> bringToFront(imageStageWrap));
+  document.getElementById('imageBackBtn').addEventListener('click', ()=> sendToBack(imageStageWrap));
+
   // ---------- Single "reset all" button: headline, sub headline, and product photo ----------
   const resetAllPosBtn = document.getElementById('resetAllPosBtn');
   resetAllPosBtn.addEventListener('click', ()=>{
@@ -1860,6 +1902,7 @@
     resetImagePos();
     resetImageZoom();
     resetImagePan();
+    resetLayerOrder();
   });
 
   // Export function — shared by JPG and PNG buttons
@@ -1968,6 +2011,9 @@
       imagePhotoBg: imagePhoto.style.backgroundImage,
       imageBoxWidth: imageStageWrap.style.width,
       imageBoxHeight: imageStageWrap.style.height,
+      headlineZ: headlineWrap.style.zIndex,
+      subheadZ: subheadWrap.style.zIndex,
+      imageZ: imageStageWrap.style.zIndex,
       ruleHidden: ruleEl.classList.contains('is-hidden'),
       footerHidden: footerStripEl.classList.contains('is-hidden'),
       ruleChecked: ruleToggle.checked,
@@ -2015,6 +2061,9 @@
     imagePhoto.style.backgroundImage = state.imagePhotoBg;
     imageStageWrap.style.width = state.imageBoxWidth;
     imageStageWrap.style.height = state.imageBoxHeight;
+    headlineWrap.style.zIndex = state.headlineZ;
+    subheadWrap.style.zIndex = state.subheadZ;
+    imageStageWrap.style.zIndex = state.imageZ;
     ruleEl.classList.toggle('is-hidden', state.ruleHidden);
     footerStripEl.classList.toggle('is-hidden', state.footerHidden);
     ruleToggle.checked = state.ruleChecked;
