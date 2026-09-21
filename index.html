@@ -30,6 +30,8 @@
     --headline-x:0px;
     --headline-y:0px;
     --headline-rotate:0deg;
+    --headline-letter-spacing:0px;
+    --subhead-letter-spacing:0px;
   }
 
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -380,7 +382,7 @@
   .headline [contenteditable]{
     display:block;
     outline:none;
-    letter-spacing:1.3px;
+    letter-spacing:calc(1.3px + var(--headline-letter-spacing));
   }
   .headline .line1{
     font-size:129px;
@@ -391,6 +393,10 @@
     color:var(--line2-color);
     margin-top:5px;
   }
+
+  /* Individual characters when a Curve amount is applied - see applyCurve() */
+  .curve-char{ display:inline-block; }
+  [contenteditable="false"].is-curved{ cursor:default; }
 
   .rule{
     width:70%;
@@ -406,7 +412,7 @@
     font-weight:700;
     font-family:var(--subhead-font);
     color:var(--subhead-color);
-    letter-spacing:0.8px;
+    letter-spacing:calc(0.8px + var(--subhead-letter-spacing));
     padding:0 41px;
     outline:none;
     position:relative;
@@ -765,6 +771,15 @@
         <div class="swatch" data-color="#0e0e0e" style="background:#0e0e0e"></div>
         <label class="swatch custom-swatch"><input type="color" value="#ff5b00"></label>
       </div>
+      <div class="control-label">Letter spacing — <span id="headlineSpacingValue">0px</span></div>
+      <div class="toolbar-row">
+        <input type="range" id="headlineSpacingSlider" class="range-slider" min="-5" max="20" value="0" step="0.5">
+      </div>
+      <div class="control-label">Curve / warp — <span id="headlineCurveValue">0</span></div>
+      <div class="toolbar-row">
+        <input type="range" id="headlineCurveSlider" class="range-slider" min="-100" max="100" value="0">
+      </div>
+      <div class="control-label" style="opacity:0.7">Curving locks the headline for editing — set it back to 0 to type again.</div>
       <div class="control-label">Headline position &amp; rotation</div>
       <div class="control-label" style="opacity:0.7">Tap the headline, then drag the "Move" handle to reposition, or the round handle above to rotate.</div>
       <div class="control-label">Layer order</div>
@@ -812,6 +827,15 @@
         <div class="swatch" data-color="#0e0e0e" style="background:#0e0e0e"></div>
         <label class="swatch custom-swatch"><input type="color" value="#ff5b00"></label>
       </div>
+      <div class="control-label">Letter spacing — <span id="subheadSpacingValue">0px</span></div>
+      <div class="toolbar-row">
+        <input type="range" id="subheadSpacingSlider" class="range-slider" min="-5" max="20" value="0" step="0.5">
+      </div>
+      <div class="control-label">Curve / warp — <span id="subheadCurveValue">0</span></div>
+      <div class="toolbar-row">
+        <input type="range" id="subheadCurveSlider" class="range-slider" min="-100" max="100" value="0">
+      </div>
+      <div class="control-label" style="opacity:0.7">Curving locks the sub headline for editing — set it back to 0 to type again.</div>
       <div class="control-label">Layer order</div>
       <div class="toolbar-row">
         <button class="btn" id="subheadFrontBtn">Bring to front</button>
@@ -1848,6 +1872,101 @@
     document.removeEventListener('pointerup', endImageRotate);
   }
 
+  // ---------- Letter spacing ----------
+  const headlineSpacingSlider = document.getElementById('headlineSpacingSlider');
+  const headlineSpacingValue = document.getElementById('headlineSpacingValue');
+  headlineSpacingSlider.addEventListener('input', ()=>{
+    root.style.setProperty('--headline-letter-spacing', headlineSpacingSlider.value + 'px');
+    headlineSpacingValue.textContent = headlineSpacingSlider.value + 'px';
+  });
+  const subheadSpacingSlider = document.getElementById('subheadSpacingSlider');
+  const subheadSpacingValue = document.getElementById('subheadSpacingValue');
+  subheadSpacingSlider.addEventListener('input', ()=>{
+    root.style.setProperty('--subhead-letter-spacing', subheadSpacingSlider.value + 'px');
+    subheadSpacingValue.textContent = subheadSpacingSlider.value + 'px';
+  });
+
+  // ---------- Text curve / warp ----------
+  // Splits a line's text nodes into one <span class="curve-char"> per character
+  // (existing bold/italic/color spans from the word toolbar are left in place as
+  // ancestors, so their styling still applies), then rotates each character
+  // around a shared pivot point below/above the line to fan them into an arc -
+  // the same trick most CSS-only "curved text" effects use.
+  function splitIntoCurveChars(el){
+    function walk(node){
+      Array.from(node.childNodes).forEach(child => {
+        if(child.nodeType === 3){
+          const frag = document.createDocumentFragment();
+          for(const ch of child.textContent){
+            const span = document.createElement('span');
+            span.className = 'curve-char';
+            span.textContent = ch;
+            frag.appendChild(span);
+          }
+          node.replaceChild(frag, child);
+        } else if(child.nodeType === 1 && !child.classList.contains('curve-char')){
+          walk(child);
+        }
+      });
+    }
+    walk(el);
+  }
+
+  function unwrapCurveChars(el){
+    el.querySelectorAll('.curve-char').forEach(span=>{
+      span.replaceWith(document.createTextNode(span.textContent));
+    });
+    el.normalize();
+  }
+
+  const CURVE_RADIUS = 260;
+  function positionCurveChars(el, value){
+    const spans = el.querySelectorAll('.curve-char');
+    const n = spans.length;
+    if(n === 0) return;
+    const totalAngle = value * 0.9;
+    const anglePerChar = n > 1 ? totalAngle / (n - 1) : 0;
+    const startAngle = -totalAngle / 2;
+    spans.forEach((span, i) => {
+      const angle = startAngle + anglePerChar * i;
+      span.style.transformOrigin = `center ${CURVE_RADIUS}px`;
+      span.style.transform = `rotate(${angle}deg)`;
+    });
+  }
+
+  // Curving needs a stable, ordered set of per-character spans, which doesn't
+  // mix well with live typing (cursor position through a DOM rebuild on every
+  // keystroke) - so the line is locked to read-only while curved, and editing
+  // resumes automatically once the amount is dialed back to 0.
+  function applyCurve(el, value){
+    if(value === 0){
+      unwrapCurveChars(el);
+      el.contentEditable = 'true';
+      el.classList.remove('is-curved');
+    } else {
+      if(!el.querySelector('.curve-char')) splitIntoCurveChars(el);
+      positionCurveChars(el, value);
+      el.contentEditable = 'false';
+      el.classList.add('is-curved');
+    }
+  }
+
+  const headlineCurveSlider = document.getElementById('headlineCurveSlider');
+  const headlineCurveValue = document.getElementById('headlineCurveValue');
+  headlineCurveSlider.addEventListener('input', ()=>{
+    const v = Number(headlineCurveSlider.value);
+    applyCurve(headlineWrap.querySelector('.line1'), v);
+    applyCurve(headlineWrap.querySelector('.line2'), v);
+    headlineCurveValue.textContent = v;
+  });
+  const subheadCurveSlider = document.getElementById('subheadCurveSlider');
+  const subheadCurveValue = document.getElementById('subheadCurveValue');
+  subheadCurveSlider.addEventListener('input', ()=>{
+    const v = Number(subheadCurveSlider.value);
+    applyCurve(document.querySelector('.subhead'), v);
+    subheadCurveValue.textContent = v;
+  });
+
   // ---------- Layer order (bring to front / send to back) ----------
   // Headline/subhead/image can all be dragged freely, so once they overlap the
   // fixed CSS z-index (2/5/6) no longer reflects what the user wants on top.
@@ -1961,7 +2080,8 @@
     '--line1-color','--line2-color','--subhead-color','--subhead-accent-color',
     '--subhead-x','--subhead-y','--subhead-rotate','--image-rotate',
     '--image-x','--image-y','--image-zoom','--image-pan-x','--image-pan-y',
-    '--headline-x','--headline-y','--headline-rotate'
+    '--headline-x','--headline-y','--headline-rotate',
+    '--headline-letter-spacing','--subhead-letter-spacing'
   ];
 
   const undoBtn = document.getElementById('undoBtn');
@@ -2004,7 +2124,14 @@
       headlineFontValue: headlineFontSelect.value,
       subheadFontHTML: subheadFontSelect.innerHTML,
       subheadFontValue: subheadFontSelect.value,
-      colorPickerValue: colorPicker.value
+      colorPickerValue: colorPicker.value,
+      headlineCurveVal: headlineCurveSlider.value,
+      subheadCurveVal: subheadCurveSlider.value,
+      headlineSpacingVal: headlineSpacingSlider.value,
+      subheadSpacingVal: subheadSpacingSlider.value,
+      line1Editable: headlineWrap.querySelector('.line1').contentEditable,
+      line2Editable: headlineWrap.querySelector('.line2').contentEditable,
+      subheadEditable: document.querySelector('.subhead').contentEditable
     };
   }
 
@@ -2055,6 +2182,21 @@
     if(subheadFontSelect.innerHTML !== state.subheadFontHTML) subheadFontSelect.innerHTML = state.subheadFontHTML;
     subheadFontSelect.value = state.subheadFontValue;
     colorPicker.value = state.colorPickerValue;
+    headlineCurveSlider.value = state.headlineCurveVal;
+    headlineCurveValue.textContent = state.headlineCurveVal;
+    subheadCurveSlider.value = state.subheadCurveVal;
+    subheadCurveValue.textContent = state.subheadCurveVal;
+    headlineSpacingSlider.value = state.headlineSpacingVal;
+    headlineSpacingValue.textContent = state.headlineSpacingVal + 'px';
+    subheadSpacingSlider.value = state.subheadSpacingVal;
+    subheadSpacingValue.textContent = state.subheadSpacingVal + 'px';
+    headlineWrap.querySelector('.line1').contentEditable = state.line1Editable;
+    headlineWrap.querySelector('.line2').contentEditable = state.line2Editable;
+    document.querySelector('.subhead').contentEditable = state.subheadEditable;
+    const headlineCurved = Number(state.headlineCurveVal) !== 0;
+    headlineWrap.querySelector('.line1').classList.toggle('is-curved', headlineCurved);
+    headlineWrap.querySelector('.line2').classList.toggle('is-curved', headlineCurved);
+    document.querySelector('.subhead').classList.toggle('is-curved', Number(state.subheadCurveVal) !== 0);
     refreshSwatchActiveStates();
     isRestoring = false;
   }
